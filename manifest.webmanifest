@@ -1,0 +1,17 @@
+{
+  "name": "PEGASO Trainer MA1746",
+  "short_name": "PEGASO Trainer",
+  "description": "Allenamento offline per memorizzare le domande MA1746.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#b80f4a",
+  "icons": [
+    {
+      "src": "icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}
