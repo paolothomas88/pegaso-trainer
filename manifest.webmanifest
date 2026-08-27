@@ -7,11 +7,19 @@
   "display": "standalone",
   "background_color": "#f5f6f8",
   "theme_color": "#b80f4a",
+  "orientation": "any",
   "icons": [
     {
       "src": "icons/icon-180.png",
       "sizes": "180x180",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }
