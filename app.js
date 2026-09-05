@@ -25,8 +25,13 @@ function rec(id){return progress[id]||(progress[id]={seen:0,ok:0,bad:0,streak:0}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(progress))}catch{}}
 function load(){try{progress=JSON.parse(localStorage.getItem(KEY)||"{}")||{}}catch{progress={}}}
 function toast(s){E.toast.textContent=s;E.toast.style.display="block";setTimeout(()=>E.toast.style.display="none",2400)}
-
 function data(){return QUESTIONS.filter(q=>E.dataset.value==="all"||q.s==="V")}
+function isUnseen(q){const r=progress[q.id];return !r||(r.seen||0)===0}
+function ensureUnseenMode(){
+  if(E.mode.querySelector('option[value="unseen"]'))return;
+  const o=document.createElement("option");o.value="unseen";o.textContent="Solo mai viste";
+  const lesson=E.mode.querySelector('option[value="lesson"]');E.mode.insertBefore(o,lesson||null);
+}
 function lessons(){
   const a=[...new Set(data().map(q=>q.l))].sort((a,b)=>a-b),old=+E.lesson.value||a[0];
   E.lesson.innerHTML="";
@@ -35,12 +40,20 @@ function lessons(){
 }
 function stats(){
   let seen=0,ok=0,bad=0,master=0,wrong=0;
-  QUESTIONS.forEach(q=>{const r=progress[q.id];if(!r)return;seen+=r.seen||0;ok+=r.ok||0;bad+=r.bad||0;if((r.streak||0)>=3)master++;if((r.bad||0)>0&&(r.streak||0)<3)wrong++});
+  QUESTIONS.forEach(q=>{const r=progress[q.id];if(!r)return;if((r.seen||0)>0)seen++;ok+=r.ok||0;bad+=r.bad||0;if((r.streak||0)>=3)master++;if((r.bad||0)>0&&(r.streak||0)<3)wrong++});
   E.gSeen.textContent=seen;E.gMastered.textContent=master;E.gWrong.textContent=wrong;E.gPct.textContent=(ok+bad)?Math.round(ok/(ok+bad)*100)+"%":"0%";
+  const seenLabel=E.gSeen.nextElementSibling;if(seenLabel)seenLabel.textContent="VISTE UNICHE";
+  const unseenOpt=E.mode.querySelector('option[value="unseen"]');if(unseenOpt){const left=data().filter(isUnseen).length;unseenOpt.textContent="Solo mai viste · "+left+" rimaste"}
+}
+function modeUi(){
+  const unseen=E.mode.value==="unseen";
+  E.lessonWrap.classList.toggle("hidden",E.mode.value!=="lesson");
+  if(unseen)E.repeat.checked=false;
 }
 function pool(){
   let p=data().slice(),m=E.mode.value;
   if(m==="lesson")p=p.filter(q=>q.l===+E.lesson.value);
+  else if(m==="unseen")p=p.filter(isUnseen);
   else if(m==="errors")p=p.filter(q=>progress[q.id]&&(progress[q.id].bad||0)>0&&(progress[q.id].streak||0)<3);
   else if(m==="mastery")p=p.filter(q=>!progress[q.id]||(progress[q.id].streak||0)<3);
   if(m!=="lesson")sh(p);
@@ -50,7 +63,7 @@ function pool(){
 function start(force=false){
   if(force)E.mode.value="errors";
   const p=pool();
-  if(!p.length)return toast(force?"Non ci sono errori da ripassare.":"Nessuna domanda disponibile.");
+  if(!p.length)return toast(force?"Non ci sono errori da ripassare.":E.mode.value==="unseen"?"Hai già visto tutte le domande disponibili in questa banca.":"Nessuna domanda disponibile.");
   clearTimeout(autoTimer);
   session={queue:p.map(q=>({q,review:false})),base:p.length,done:0,ok:0,bad:0,streak:0,current:null,locked:false};
   E.setup.classList.add("hidden");E.summary.classList.add("hidden");E.quiz.classList.remove("hidden");next();
@@ -61,7 +74,7 @@ function render(){
   const {q,review}=session.current;
   E.lessonBadge.textContent="Videolezione "+q.l;E.qBadge.textContent="Q"+q.n;
   E.sourceBadge.textContent=q.s==="V"?"CONFERMATA PEGASO":"CANDIDATA DOCSITY";E.sourceBadge.className="badge "+(q.s==="V"?"ok":"warn");
-  E.reviewBadge.textContent=review?"RIPASSO ERRORE":"NUOVA";E.reviewBadge.className="badge "+(review?"warn":"");
+  E.reviewBadge.textContent=review?"RIPASSO ERRORE":E.mode.value==="unseen"?"MAI VISTA":"NUOVA";E.reviewBadge.className="badge "+(review?"warn":"");
   E.question.textContent=q.q;E.answers.innerHTML="";E.feedback.className="feedback";E.feedback.textContent="";E.cont.classList.add("hidden");E.dont.classList.remove("hidden");
   const a=q.a.map((t,i)=>({t,i}));if(E.shuffle.checked)sh(a);
   a.forEach((o,j)=>{const b=document.createElement("button");b.className="answer";b.type="button";b.dataset.i=o.i;b.innerHTML='<span class="letter">'+LETTERS[j]+'</span><span></span>';b.lastChild.textContent=o.t;b.addEventListener("click",()=>choose(o.i,b));E.answers.append(b)});
@@ -80,7 +93,7 @@ function choose(i,b){
   }else{
     r.bad++;r.streak=0;session.bad++;session.streak=0;mark(q.c,b);
     E.feedback.textContent="✗ Sbagliata. Corretta: "+q.a[q.c];E.feedback.className="feedback bad";E.cont.classList.remove("hidden");E.dont.classList.add("hidden");
-    if(E.repeat.checked)session.queue.splice(Math.min(5,session.queue.length),0,{q,review:true});
+    if(E.repeat.checked&&E.mode.value!=="unseen")session.queue.splice(Math.min(5,session.queue.length),0,{q,review:true});
     save();queueAnswer(q.id,false);stats();sstats();syncSoon();
   }
 }
@@ -165,13 +178,13 @@ async function resetAll(){
 async function loadQuestions(){let s="";for(const p of PARTS)s+=await (await fetch(p)).text();const bin=Uint8Array.from(atob(s),c=>c.charCodeAt(0)),stream=new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip")),txt=await new Response(stream).text();QUESTIONS=JSON.parse(txt);if(QUESTIONS.length!==1608)throw Error("Banca incompleta")}
 async function boot(){
   try{
-    syncSecretFromUrl();await loadQuestions();load();lessons();stats();injectSyncUi();E.loading.classList.add("hidden");E.setup.classList.remove("hidden");
+    syncSecretFromUrl();await loadQuestions();load();ensureUnseenMode();E.dataset.value="all";lessons();modeUi();stats();injectSyncUi();E.loading.classList.add("hidden");E.setup.classList.remove("hidden");
     if(hasSyncKey())await cloudSync(true);
   }catch(e){E.loading.textContent="Errore caricamento banca. Ricarica la pagina quando sei online."}
 }
 
-E.mode.addEventListener("change",()=>E.lessonWrap.classList.toggle("hidden",E.mode.value!=="lesson"));
-E.dataset.addEventListener("change",lessons);E.start.addEventListener("click",()=>start());E.cont.addEventListener("click",next);E.dont.addEventListener("click",dont);E.stop.addEventListener("click",finish);E.home.addEventListener("click",home);E.again.addEventListener("click",home);E.errors.addEventListener("click",()=>{home();E.mode.value="errors";start(true)});E.exp.addEventListener("click",exp);E.imp.addEventListener("click",()=>E.impFile.click());E.impFile.addEventListener("change",()=>imp(E.impFile.files&&E.impFile.files[0]));E.reset.addEventListener("click",resetAll);
+E.mode.addEventListener("change",()=>{modeUi();stats()});
+E.dataset.addEventListener("change",()=>{lessons();stats()});E.start.addEventListener("click",()=>start());E.cont.addEventListener("click",next);E.dont.addEventListener("click",dont);E.stop.addEventListener("click",finish);E.home.addEventListener("click",home);E.again.addEventListener("click",home);E.errors.addEventListener("click",()=>{home();E.mode.value="errors";modeUi();start(true)});E.exp.addEventListener("click",exp);E.imp.addEventListener("click",()=>E.impFile.click());E.impFile.addEventListener("change",()=>imp(E.impFile.files&&E.impFile.files[0]));E.reset.addEventListener("click",resetAll);
 document.addEventListener("keydown",e=>{if(E.quiz.classList.contains("hidden")||!session||session.locked||/INPUT|SELECT|TEXTAREA/.test(e.target?.tagName||""))return;const k=e.key.toUpperCase(),i=["1","2","3","4"].includes(k)?+k-1:LETTERS.indexOf(k);if(i>=0)E.answers.children[i]?.click()});
 window.addEventListener("online",()=>cloudSync(true));document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")cloudSync(true)});setInterval(()=>{if(hasSyncKey())cloudSync(true)},60000);
 if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
