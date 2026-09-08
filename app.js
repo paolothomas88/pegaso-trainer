@@ -46,9 +46,9 @@ function stats(){
   const unseenOpt=E.mode.querySelector('option[value="unseen"]');if(unseenOpt){const left=data().filter(isUnseen).length;unseenOpt.textContent="Solo mai viste · "+left+" rimaste"}
 }
 function modeUi(){
-  const unseen=E.mode.value==="unseen";
   E.lessonWrap.classList.toggle("hidden",E.mode.value!=="lesson");
-  if(unseen)E.repeat.checked=false;
+  E.repeat.checked=true;
+  E.repeat.disabled=true;
 }
 function pool(){
   let p=data().slice(),m=E.mode.value;
@@ -93,7 +93,7 @@ function choose(i,b){
   }else{
     r.bad++;r.streak=0;session.bad++;session.streak=0;mark(q.c,b);
     E.feedback.textContent="✗ Sbagliata. Corretta: "+q.a[q.c];E.feedback.className="feedback bad";E.cont.classList.remove("hidden");E.dont.classList.add("hidden");
-    if(E.repeat.checked&&E.mode.value!=="unseen")session.queue.splice(Math.min(5,session.queue.length),0,{q,review:true});
+    session.queue.splice(Math.min(5,session.queue.length),0,{q,review:true});
     save();queueAnswer(q.id,false);stats();sstats();syncSoon();
   }
 }
